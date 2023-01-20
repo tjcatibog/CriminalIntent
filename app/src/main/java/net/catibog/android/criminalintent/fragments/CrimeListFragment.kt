@@ -1,4 +1,4 @@
-package net.catibog.android.criminalintent
+package net.catibog.android.criminalintent.fragments
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.launch
+import net.catibog.android.criminalintent.CrimeListAdapter
 import net.catibog.android.criminalintent.databinding.FragmentCrimeListBinding
 
 class CrimeListFragment : Fragment() {

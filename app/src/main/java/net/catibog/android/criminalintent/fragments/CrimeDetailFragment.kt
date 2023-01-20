@@ -1,4 +1,4 @@
-package net.catibog.android.criminalintent
+package net.catibog.android.criminalintent.fragments
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.core.widget.doOnTextChanged
 import androidx.fragment.app.Fragment
 import net.catibog.android.criminalintent.databinding.FragmentCrimeDetailBinding
+import net.catibog.android.criminalintent.models.Crime
 import java.util.*
 
 class CrimeDetailFragment : Fragment() {

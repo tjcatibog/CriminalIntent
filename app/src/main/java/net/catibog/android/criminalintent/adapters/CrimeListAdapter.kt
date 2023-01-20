@@ -2,13 +2,13 @@ package net.catibog.android.criminalintent
 
 import android.icu.text.DateFormat
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import com.google.android.material.snackbar.Snackbar
 import net.catibog.android.criminalintent.databinding.ListItemCrimeDefaultBinding
 import net.catibog.android.criminalintent.databinding.ListItemCrimeUrgentBinding
+import net.catibog.android.criminalintent.models.Crime
 import java.util.*
 
 class CrimeListAdapter(private val crimes: List<Crime>): RecyclerView.Adapter<CrimeHolder>() {
