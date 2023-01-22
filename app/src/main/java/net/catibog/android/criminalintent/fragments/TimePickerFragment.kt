@@ -5,6 +5,7 @@ import android.app.TimePickerDialog
 import android.icu.util.Calendar
 import android.icu.util.GregorianCalendar
 import android.os.Bundle
+import android.text.format.DateFormat
 import androidx.core.os.bundleOf
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.setFragmentResult
@@ -34,7 +35,7 @@ class TimePickerFragment: DialogFragment() {
             timeListener,
             initialHour,
             initialMinute,
-            false
+            DateFormat.is24HourFormat(requireContext())
         )
     }
 

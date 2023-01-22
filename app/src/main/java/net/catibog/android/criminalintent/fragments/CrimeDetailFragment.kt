@@ -1,12 +1,18 @@
 package net.catibog.android.criminalintent.fragments
 
-import android.icu.text.DateFormat
-import android.icu.text.SimpleDateFormat
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.provider.ContactsContract
+import android.text.format.DateFormat
+import android.view.*
 import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.MenuHost
+import androidx.core.view.MenuProvider
 import androidx.core.widget.doOnTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.setFragmentResultListener
@@ -23,10 +29,22 @@ import net.catibog.android.criminalintent.databinding.FragmentCrimeDetailBinding
 import net.catibog.android.criminalintent.models.Crime
 import java.util.*
 
+private const val DATE_FORMAT = "EEEE, MMMM d, yyyy"
+private const val TIME_FORMAT = "HH:mm"
+private const val TIME_FORMAT_AMPM = "KK:mm aaa"
+
+/**
+ * TODO: add implicit intent to query suspect's phone number and dial it (ch16)
+ */
 class CrimeDetailFragment : Fragment() {
     private val args: CrimeDetailFragmentArgs by navArgs()
     private val crimeDetailViewModel: CrimeDetailViewModel by viewModels {
         CrimeDetailViewModelFactory(args.crimeId)
+    }
+    private val selectSuspect = registerForActivityResult(
+        ActivityResultContracts.PickContact()
+    ) { uri: Uri? ->
+        uri?.let { parseContactSelection(it) }
     }
     private var _binding: FragmentCrimeDetailBinding? = null
     private val binding
@@ -58,6 +76,23 @@ class CrimeDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        val menuHost: MenuHost = requireActivity()
+        menuHost.addMenuProvider(object: MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.fragment_crime_detail, menu)
+            }
+
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                return when (menuItem.itemId) {
+                    R.id.delete_crime -> {
+                        deleteCrime()
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
+
         binding.apply {
             crimeTitle.doOnTextChanged { text, _, _, _ ->
                 crimeDetailViewModel.updateCrime { oldCrime ->
@@ -74,28 +109,29 @@ class CrimeDetailFragment : Fragment() {
                     oldCrime.copy(requiresPolice = isChecked)
                 }
             }
+            crimeSuspect.setOnClickListener {
+                selectSuspect.launch(null)
+            }
+            val selectSuspectIntent = selectSuspect.contract.createIntent(
+                requireContext(), null
+            )
+            crimeSuspect.isEnabled = canResolveIntent(selectSuspectIntent)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                crimeDetailViewModel.crime.collect() { crime ->
+                crimeDetailViewModel.crime.collect { crime ->
                     crime?.let { update(it) }
                 }
             }
         }
 
         setFragmentResultListener(DatePickerFragment.REQUEST_KEY_DATE) { _, bundle ->
-            val newDate = bundle.getSerializable(DatePickerFragment.BUNDLE_KEY_DATE) as Date
-            crimeDetailViewModel.updateCrime {
-                it.copy(date = newDate)
-            }
+            parseDateSelection(bundle, DatePickerFragment.BUNDLE_KEY_DATE)
         }
 
         setFragmentResultListener(TimePickerFragment.REQUEST_KEY_TIME) { _, bundle ->
-            val newDate = bundle.getSerializable(TimePickerFragment.BUNDLE_KEY_TIME) as Date
-            crimeDetailViewModel.updateCrime {
-                it.copy(date = newDate)
-            }
+            parseDateSelection(bundle, TimePickerFragment.BUNDLE_KEY_TIME)
         }
     }
 
@@ -105,24 +141,96 @@ class CrimeDetailFragment : Fragment() {
     }
 
     private fun update(crime: Crime) {
-        val dateFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
-        val timeFormat = SimpleDateFormat("KK:mm aaa", Locale.CANADA)
         binding.apply {
             if (crimeTitle.text.toString() != crime.title) {
                 crimeTitle.setText(crime.title)
             }
-            crimeDate.text = dateFormat.format(crime.date).toString()
+            crimeDate.text = DateFormat.format(DATE_FORMAT, crime.date).toString()
             crimeDate.setOnClickListener {
                 findNavController().navigate(
                     CrimeDetailFragmentDirections.selectDate(crime.date)
                 )
             }
-            crimeTime.text = timeFormat.format(crime.date).toString()
+            crimeTime.text = DateFormat.format(
+                if (DateFormat.is24HourFormat(requireContext())) TIME_FORMAT else TIME_FORMAT_AMPM,
+                crime.date
+            ).toString()
             crimeTime.setOnClickListener {
                 findNavController().navigate(CrimeDetailFragmentDirections.selectTime(crime.date))
             }
             crimeSolved.isChecked = crime.isSolved
             crimeRequiresPolice.isChecked = crime.requiresPolice
+            crimeSuspect.text = crime.suspect.ifEmpty {
+                getString(R.string.crime_suspect_text)
+            }
+            crimeReport.setOnClickListener {
+                val reportIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, getCrimeReport(crime))
+                    putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crime_report_subject))
+                }
+                val chooserIntent = Intent.createChooser(
+                    reportIntent,
+                    getString(R.string.send_report)
+                )
+                startActivity(chooserIntent)
+            }
         }
+    }
+
+    private fun deleteCrime() {
+        Snackbar.make(binding.root, "TODO: Complete deleteCrime()", Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun canResolveIntent(intent: Intent): Boolean {
+        val packageManager: PackageManager = requireActivity().packageManager
+        val resolvedActivity: ResolveInfo? = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        return resolvedActivity != null
+    }
+
+    private fun parseContactSelection(contactUri: Uri) {
+        val queryFields = arrayOf(ContactsContract.Contacts.DISPLAY_NAME)
+        val queryCursor = requireActivity().contentResolver.query(contactUri, queryFields, null, null, null)
+        queryCursor?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val suspect = cursor.getString(0)
+                crimeDetailViewModel.updateCrime { oldCrime ->
+                    oldCrime.copy(suspect = suspect)
+                }
+            }
+        }
+    }
+
+    private fun parseDateSelection(bundle: Bundle, key: String) {
+        val newDate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            bundle.getSerializable(key, Date::class.java)
+        } else {
+            bundle.getSerializable(key) as Date
+        }
+        newDate?.let {
+            crimeDetailViewModel.updateCrime {
+                it.copy(date = newDate)
+            }
+        }
+    }
+
+    private fun getCrimeReport(crime: Crime): String {
+        val solvedText = getString(
+            if (crime.isSolved) R.string.crime_report_solved else R.string.crime_report_unsolved
+        )
+        val dateText = DateFormat.format(DATE_FORMAT, crime.date).toString()
+        val suspectText = if (crime.suspect.isBlank()) {
+            getString(R.string.crime_report_no_suspect)
+        } else {
+            getString(R.string.crime_report_suspect, crime.suspect)
+        }
+        val requiresPoliceText = getString(
+            if (crime.requiresPolice) R.string.crime_report_police_required else R.string.crime_report_no_police_required
+        )
+
+        return getString(
+            R.string.crime_report,
+            crime.title, dateText, solvedText, suspectText, requiresPoliceText
+        )
     }
 }

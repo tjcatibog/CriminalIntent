@@ -1,8 +1,6 @@
 package net.catibog.android.criminalintent.models
 
-import androidx.room.Dao
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import java.util.*
 
@@ -14,6 +12,12 @@ interface CrimeDao {
     @Query("SELECT * FROM crime WHERE id=(:id)")
     suspend fun getCrime(id: UUID): Crime
 
+    @Insert
+    suspend fun addCrime(crime: Crime)
+
     @Update
     suspend fun updateCrime(crime: Crime)
+
+    @Delete
+    suspend fun deleteCrime(crime: Crime)
 }
