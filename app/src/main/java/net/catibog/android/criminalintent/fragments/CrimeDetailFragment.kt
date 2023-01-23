@@ -11,8 +11,10 @@ import android.text.format.DateFormat
 import android.view.*
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
+import androidx.core.view.doOnLayout
 import androidx.core.widget.doOnTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.setFragmentResultListener
@@ -27,6 +29,8 @@ import kotlinx.coroutines.launch
 import net.catibog.android.criminalintent.R
 import net.catibog.android.criminalintent.databinding.FragmentCrimeDetailBinding
 import net.catibog.android.criminalintent.models.Crime
+import net.catibog.android.criminalintent.util.getScaledBitmap
+import java.io.File
 import java.util.*
 
 private const val DATE_FORMAT = "EEEE, MMMM d, yyyy"
@@ -40,6 +44,16 @@ class CrimeDetailFragment : Fragment() {
     private val args: CrimeDetailFragmentArgs by navArgs()
     private val crimeDetailViewModel: CrimeDetailViewModel by viewModels {
         CrimeDetailViewModelFactory(args.crimeId)
+    }
+    private var photoName: String? = null
+    private val takePhoto = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { didTakePhoto: Boolean ->
+        if (didTakePhoto && photoName != null) {
+            crimeDetailViewModel.updateCrime { oldCrime ->
+                oldCrime.copy(photoFileName = photoName)
+            }
+        }
     }
     private val selectSuspect = registerForActivityResult(
         ActivityResultContracts.PickContact()
@@ -109,13 +123,30 @@ class CrimeDetailFragment : Fragment() {
                     oldCrime.copy(requiresPolice = isChecked)
                 }
             }
-            crimeSuspect.setOnClickListener {
-                selectSuspect.launch(null)
-            }
+
             val selectSuspectIntent = selectSuspect.contract.createIntent(
                 requireContext(), null
             )
             crimeSuspect.isEnabled = canResolveIntent(selectSuspectIntent)
+            crimeSuspect.setOnClickListener {
+                selectSuspect.launch(null)
+            }
+
+            crimeCamera.setOnClickListener {
+                photoName = "IMG_${Date()}.jpg"
+                val photoFile = File(
+                    requireContext().applicationContext.filesDir,
+                    photoName.toString()
+                )
+                val photoUri = FileProvider.getUriForFile(
+                    requireContext(),
+                    "net.catibog.android.criminalintent.fileprovider",
+                    photoFile
+                )
+                takePhoto.launch(photoUri)
+            }
+            val captureImageIntent = takePhoto.contract.createIntent(requireContext(), Uri.EMPTY)
+            crimeCamera.isEnabled = canResolveIntent(captureImageIntent)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -174,6 +205,29 @@ class CrimeDetailFragment : Fragment() {
                     getString(R.string.send_report)
                 )
                 startActivity(chooserIntent)
+            }
+            updatePhoto(crime.photoFileName)
+        }
+    }
+
+    private fun updatePhoto(photoFileName: String?) {
+        if (binding.crimePhoto.tag != photoFileName) {
+            val photoFile = photoFileName?.let {
+                File(requireContext().applicationContext.filesDir, it)
+            }
+            if (photoFile?.exists() == true) {
+                binding.crimePhoto.doOnLayout { measuredView ->
+                    val scaledBitmap = getScaledBitmap(
+                        photoFile.path,
+                        measuredView.height,
+                        measuredView.width
+                    )
+                    binding.crimePhoto.setImageBitmap(scaledBitmap)
+                    binding.crimePhoto.tag = photoFileName
+                }
+            } else {
+                binding.crimePhoto.setImageBitmap(null)
+                binding.crimePhoto.tag = null
             }
         }
     }
