@@ -39,6 +39,7 @@ private const val TIME_FORMAT_AMPM = "KK:mm aaa"
 
 /**
  * TODO: add implicit intent to query suspect's phone number and dial it (ch16)
+ * TODO: complete ch19 challenges
  */
 class CrimeDetailFragment : Fragment() {
     private val args: CrimeDetailFragmentArgs by navArgs()
@@ -176,16 +177,13 @@ class CrimeDetailFragment : Fragment() {
             if (crimeTitle.text.toString() != crime.title) {
                 crimeTitle.setText(crime.title)
             }
-            crimeDate.text = DateFormat.format(DATE_FORMAT, crime.date).toString()
+            crimeDate.text = DateFormat.getLongDateFormat(requireContext()).format(crime.date).toString()
             crimeDate.setOnClickListener {
                 findNavController().navigate(
                     CrimeDetailFragmentDirections.selectDate(crime.date)
                 )
             }
-            crimeTime.text = DateFormat.format(
-                if (DateFormat.is24HourFormat(requireContext())) TIME_FORMAT else TIME_FORMAT_AMPM,
-                crime.date
-            ).toString()
+            crimeTime.text = DateFormat.getTimeFormat(requireContext()).format(crime.date)
             crimeTime.setOnClickListener {
                 findNavController().navigate(CrimeDetailFragmentDirections.selectTime(crime.date))
             }
@@ -224,10 +222,12 @@ class CrimeDetailFragment : Fragment() {
                     )
                     binding.crimePhoto.setImageBitmap(scaledBitmap)
                     binding.crimePhoto.tag = photoFileName
+                    binding.crimePhoto.contentDescription = getString(R.string.crime_photo_image_description)
                 }
             } else {
                 binding.crimePhoto.setImageBitmap(null)
                 binding.crimePhoto.tag = null
+                binding.crimePhoto.contentDescription = getString(R.string.crime_photo_no_image_description)
             }
         }
     }
